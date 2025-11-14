@@ -6,8 +6,14 @@ var builder = WebApplication.CreateBuilder(args);
 
 // services
 builder.Services.AddMemoryCache();
+builder.Services.AddSingleton<IOpenWeatherKeySelector, RoundRobinOpenWeatherKeySelector>();
 builder.Services.AddSingleton<IRateLimitStore, InMemoryRateLimitStore>();
 builder.Services.AddScoped<IOpenWeatherService, OpenWeatherService>();
+builder.Services.AddHttpClient("OpenWeatherClient", client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(10);
+    client.DefaultRequestHeaders.Add("Accept", "application/json");
+});
 
 
 builder.Services.AddControllers();
