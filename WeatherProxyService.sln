@@ -1,9 +1,11 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
-VisualStudioVersion = 17.14.36623.8 d17.14
+VisualStudioVersion = 17.14.36623.8
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WeatherProxyService", "WeatherProxyService\WeatherProxyService.csproj", "{9B5635DD-F29D-48C7-8FDE-E459A0156991}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WeatherProxyService.Tests", "WeatherProxyService.Tests\WeatherProxyService.Tests.csproj", "{FA7F6AC7-A271-4E68-B450-82BF474D1ABA}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -15,6 +17,10 @@ Global
 		{9B5635DD-F29D-48C7-8FDE-E459A0156991}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{9B5635DD-F29D-48C7-8FDE-E459A0156991}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{9B5635DD-F29D-48C7-8FDE-E459A0156991}.Release|Any CPU.Build.0 = Release|Any CPU
+		{FA7F6AC7-A271-4E68-B450-82BF474D1ABA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{FA7F6AC7-A271-4E68-B450-82BF474D1ABA}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{FA7F6AC7-A271-4E68-B450-82BF474D1ABA}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{FA7F6AC7-A271-4E68-B450-82BF474D1ABA}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
