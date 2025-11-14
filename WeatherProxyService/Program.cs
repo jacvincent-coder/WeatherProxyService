@@ -5,7 +5,10 @@ var builder = WebApplication.CreateBuilder(args);
 
 
 // services
+builder.Services.AddMemoryCache();
+builder.Services.AddSingleton<IRateLimitStore, InMemoryRateLimitStore>();
 builder.Services.AddScoped<IOpenWeatherService, OpenWeatherService>();
+
 
 builder.Services.AddControllers();
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
@@ -30,8 +33,9 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-// Middleware to validate API keys
+// Middleware to validate API keys and enforce rate limiting
 app.UseMiddleware<ApiKeyValidationMiddleware>();
+app.UseMiddleware<RateLimitingMiddleware>();
 
 app.UseHttpsRedirection();
 
