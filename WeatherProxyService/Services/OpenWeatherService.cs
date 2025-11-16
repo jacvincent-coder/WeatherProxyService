@@ -3,6 +3,8 @@ using System.Net.Http;
 using System.Net.Http.Json;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
+using WeatherProxyService.Models.GeoCoding;
+using WeatherProxyService.Models.OpenWeather;
 
 namespace WeatherProxyService.Services
 {
@@ -14,8 +16,10 @@ namespace WeatherProxyService.Services
     {
         private readonly IHttpClientFactory _httpFactory;
         private readonly IOpenWeatherKeySelector _keySelector;
-        private readonly string _baseUrl;
         private readonly ILogger<OpenWeatherService> _logger;
+
+        private readonly string _weatherBaseUrl;
+        private readonly string _geoBaseUrl;
 
         public OpenWeatherService(
             IHttpClientFactory httpFactory,
@@ -27,8 +31,12 @@ namespace WeatherProxyService.Services
             _keySelector = keySelector;
 
             // Allow overriding in config, fallback to default OpenWeather URL
-            _baseUrl = config.GetValue<string>("OpenWeather:BaseUrl")
-                       ?? "https://api.openweathermap.org/data/2.5/weather";
+            _weatherBaseUrl = config.GetValue<string>("OpenWeather:BaseUrl")
+                             ?? "https://api.openweathermap.org/data/2.5/weather";
+
+            _geoBaseUrl = config.GetValue<string>("OpenWeather:GeocodeUrl")
+                          ?? "http://api.openweathermap.org/geo/1.0/direct";
+
             _logger = logger;
         }
 
@@ -36,15 +44,25 @@ namespace WeatherProxyService.Services
         /// Retrieves the short weather "description" field from the OpenWeather API.
         /// Selects a rotating API key using IOpenWeatherKeySelector.
         /// </summary>
-        public async Task<(bool success, string? description, string? error)> GetWeatherDescriptionAsync(string city, string country)
+        public async Task<(bool success, string? description, string? error)>GetWeatherDescriptionAsync(string city, string country)
         {
-            _logger.LogInformation("Calling OpenWeather for City={City}, Country={Country}", city, country);
+            _logger.LogInformation("Calling OpenWeather for City={City}, Country={Country}",city, country);
 
             var apiKey = _keySelector.GetNextKey();
             var client = _httpFactory.CreateClient("OpenWeatherClient");
 
-            // Build query URL
-            var url = $"{_baseUrl}?q={Uri.EscapeDataString(city)},{Uri.EscapeDataString(country)}&appid={apiKey}";
+            // validate using Geocoding API for better correctness
+            var (valid, lat, lon, validationError) = await ValidateCityCountryAsync(city, country);
+
+            if (!valid)
+            {
+                _logger.LogWarning("Validation failed for City={City}, Country={Country}. Error={Error}",
+                    city, country, validationError);
+
+                return (false, null, validationError);
+            }
+
+            var url = $"{_weatherBaseUrl}?lat={lat}&lon={lon}&appid={apiKey}";
 
             try
             {
@@ -52,7 +70,10 @@ namespace WeatherProxyService.Services
 
                 if (!response.IsSuccessStatusCode)
                 {
-                    _logger.LogWarning("OpenWeather returned {StatusCode} for {City}/{Country}", response.StatusCode, city, country);
+                    _logger.LogWarning(
+                        "OpenWeather returned {StatusCode} for {City}/{Country}",
+                        response.StatusCode, city, country);
+
                     var body = await response.Content.ReadAsStringAsync();
                     return (false, null, $"Upstream error {response.StatusCode}: {body}");
                 }
@@ -68,23 +89,71 @@ namespace WeatherProxyService.Services
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Exception calling OpenWeather for {City}/{Country}", city, country);
+                _logger.LogError(ex,
+                    "Exception calling OpenWeather for City={City}/{Country}",
+                    city, country);
 
                 return (false, null, $"Exception calling OpenWeather: {ex.Message}");
             }
         }
 
         /// <summary>
-        /// Strongly typed model representing only the fields we need from OpenWeather response.
+        /// Validates that the given city + country represent a valid location
+        /// using OpenWeather’s Geocoding API. Returns lat/lon coordinates if valid.
         /// </summary>
-        private class OpenWeatherResponse
+        public async Task<(bool success, double lat, double lon, string? error)> ValidateCityCountryAsync(string city, string country)
         {
-            public WeatherItem[]? Weather { get; set; }
-        }
+            _logger.LogInformation(
+                "Validating City={City}, Country={Country} via Geocoding API",
+                city, country);
 
-        private class WeatherItem
-        {
-            public string? Description { get; set; }
+            var apiKey = _keySelector.GetNextKey();
+            var client = _httpFactory.CreateClient("OpenWeatherClient");
+
+            var url =
+                $"{_geoBaseUrl}?q={Uri.EscapeDataString(city)},{Uri.EscapeDataString(country)}&limit=1&appid={apiKey}";
+
+            try
+            {
+                var response = await client.GetAsync(url);
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    _logger.LogWarning(
+                        "Geocoding returned non-success {StatusCode} for {City}/{Country}",
+                        response.StatusCode, city, country);
+
+                    var body = await response.Content.ReadAsStringAsync();
+                    return (false, 0, 0, $"Geocoding error {response.StatusCode}: {body}");
+                }
+
+                var results = await response.Content.ReadFromJsonAsync<GeoCodingResponse[]>();
+
+                if (results == null || results.Length == 0)
+                {
+                    _logger.LogWarning(
+                        "City/Country mismatch detected. No geocoding results for {City}/{Country}",
+                        city, country);
+
+                    return (false, 0, 0,
+                        "No matching city found for the specified country. Please check spelling or country code.");
+                }
+
+                var match = results[0];
+
+                _logger.LogInformation(
+                    "Validation succeeded for {City}/{Country}. Lat={Lat}, Lon={Lon}",
+                    city, country, match.Latitude, match.Longitude);
+
+                return (true, match.Latitude, match.Longitude, null);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex,
+                    "Exception occurred during geocoding validation for {City}/{Country}",city, country);
+
+                return (false, 0, 0, $"Exception calling Geocoding API: {ex.Message}");
+            }
         }
     }
 }

@@ -73,5 +73,18 @@ namespace WeatherProxyService.Tests.Controllers
 
             responseObj!.description.Should().Be("clear sky");
         }
+
+        [Fact]
+        public async Task Should_Return502_When_ValidationFails()
+        {
+            _weatherServiceMock
+                .Setup(s => s.GetWeatherDescriptionAsync("Sydney", "??"))
+                .ReturnsAsync((false, null, "Invalid location"));
+
+            var response = await _client.GetAsync("/api/weather?city=Sydney&country=??");
+
+            response.StatusCode.Should().Be(HttpStatusCode.BadGateway);
+        }
+
     }
 }

@@ -34,35 +34,47 @@ namespace WeatherProxyService.Controllers
         /// <returns>
         /// 200 OK with { description = "..."} on success  
         /// 400 BadRequest if parameters are missing  
+        /// 400 BadRequest Geocoding mismatch  
         /// 502 BadGateway if OpenWeather API fails  
         /// </returns>
         [HttpGet]
         public async Task<IActionResult> Get([FromQuery] string city, [FromQuery] string country)
         {
-            _logger.LogInformation("Weather endpoint hit for {City}, {Country}", city, country);
+            _logger.LogInformation("Weather endpoint hit for City={City}, Country={Country}", city, country);
 
             if (string.IsNullOrWhiteSpace(city) || string.IsNullOrWhiteSpace(country))
             {
-                _logger.LogWarning(
-                    "Bad request: missing city or country parameter. City='{City}', Country='{Country}'",
-                    city, country);
+                _logger.LogWarning("BadRequest – Missing parameters. City='{City}', Country='{Country}'", city, country);
+
                 return BadRequest(new
                 {
-                    error = "Both 'city' and 'country' query parameters are required."
+                    error = "Both 'city' and 'country' parameters are required."
                 });
             }
 
             city = city.Trim();
             country = country.Trim();
 
-            // Call service layer
-            var (success, description, error) = await _openWeather.GetWeatherDescriptionAsync(city, country);
+            var (success, description, error) =
+                await _openWeather.GetWeatherDescriptionAsync(city, country);
 
+            // Geocoding OR weather failure both come through here,
+            // but we distinguish based on message content.
             if (!success)
             {
-                _logger.LogWarning(
-                    "Failed to retrieve weather for {City}, {Country}. Error: {Error}",
-                    city, country, error);
+                if (error != null && error.StartsWith("No matching city", StringComparison.OrdinalIgnoreCase))
+                {
+                    _logger.LogWarning("Validation failed for {City}, {Country}: {Error}", city, country, error);
+
+                    return BadRequest(new
+                    {
+                        error = "City and country validation failed.",
+                        details = error
+                    });
+                }
+
+                // Weather lookup failure → treat as 502 BadGateway
+                _logger.LogWarning("Upstream weather failure for {City}/{Country}: {Error}", city, country, error);
 
                 return StatusCode(502, new
                 {
