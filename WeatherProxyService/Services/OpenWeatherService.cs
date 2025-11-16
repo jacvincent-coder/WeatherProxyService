@@ -1,8 +1,9 @@
-﻿using System;
+﻿using Microsoft.Extensions.Configuration;
+using System;
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Threading.Tasks;
-using Microsoft.Extensions.Configuration;
+using WeatherProxyService.Helpers;
 using WeatherProxyService.Models.GeoCoding;
 using WeatherProxyService.Models.OpenWeather;
 
@@ -110,8 +111,17 @@ namespace WeatherProxyService.Services
             var apiKey = _keySelector.GetNextKey();
             var client = _httpFactory.CreateClient("OpenWeatherClient");
 
+            // Normalize country
+            var normalizedCountry = CountryCodeMapper.NormalizeToIso(country);
+
+            // If we cannot map the country input then reject immediately
+            if (normalizedCountry == null)
+            {
+                return (false, 0, 0, $"Unknown country '{country}'. Please use a valid country name or ISO code.");
+            }
+
             var url =
-                $"{_geoBaseUrl}?q={Uri.EscapeDataString(city)},{Uri.EscapeDataString(country)}&limit=1&appid={apiKey}";
+                $"{_geoBaseUrl}?q={Uri.EscapeDataString(city)},{Uri.EscapeDataString(normalizedCountry)}&limit=1&appid={apiKey}";
 
             try
             {
@@ -140,6 +150,17 @@ namespace WeatherProxyService.Services
                 }
 
                 var match = results[0];
+
+                // Validate strict country match
+                if (!string.Equals(match.Country, normalizedCountry, StringComparison.OrdinalIgnoreCase))
+                {
+                    _logger.LogWarning(
+                        "City/Country mismatch detected. No geocoding results for {City}/{Country}",
+                        city, country);
+
+                    return (false, 0, 0,
+                        $"City '{city}' does not belong to country '{country}'. Found: '{match.Country}'");
+                }
 
                 _logger.LogInformation(
                     "Validation succeeded for {City}/{Country}. Lat={Lat}, Lon={Lon}",
