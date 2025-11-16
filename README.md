@@ -5,7 +5,7 @@ WeatherProxyService is a lightweight full‑stack application consisting of:
 
 - **.NET 8 Web API (Backend)** acting as a proxy for OpenWeather’s API  
 - **React + TypeScript (Frontend)** to input city, country and display weather description  
-- **API Key validation**, **Rate limiting**, and **Unit tests with coverage**
+- Built-in **API Key validation**, **Rate limiting**, **geocoding validation**, **Application Insights telemetry** and **Unit tests with coverage**
 
 ---
 
@@ -89,9 +89,11 @@ So you can call `/api/weather` directly during development.
 - Backend validates:
   - API key  
   - Rate limit (5 req/hour per client)
+  - Geocoding Validation (New)
 - Backend forwards the request to OpenWeather using rotating API keys
 - Only returns the **weather description** field
-- Frontend sends requests and displays:
+- Application Insights Telemetry (New)
+- Frontend(React + Typescript) sends requests and displays:
   - Weather description  
   - Errors  
   - Rate limit header details
@@ -99,12 +101,16 @@ So you can call `/api/weather` directly during development.
 ---
 
 # 🌱 Future Enhancements
-- Add strict city–country validation using Geocoding API  
-- Add Application Insights telemetry  
+- Add strict city–country validation using Geocoding API  - **Added now**
+- Add Application Insights telemetry  - **Added now**
+- Replace in-memory rate limiting with distributed cache (Redis)
+- Add Logging correlation IDs in AI
 - Add Polly (Retry / Timeout / Circuit Breaker)  
-- Add Docker support  
+- Add Docker support and Kubernetes manifests
 - Enhance UI with TailwindCSS or Material UI  
-- Add caching for repeated weather lookups  
+- Add caching for repeated weather lookups
+- Azure Devops CI/CD pipeline
+- And more...
 
 ---
 
