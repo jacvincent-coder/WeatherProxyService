@@ -12,6 +12,7 @@ namespace WeatherProxyService.Middleware
     {
         private readonly RequestDelegate _next;
         private readonly IRateLimitStore _store;
+        private readonly ILogger<RateLimitingMiddleware> _logger;
 
         // API limit configuration
         private const int LIMIT_PER_HOUR = 5;
@@ -21,10 +22,13 @@ namespace WeatherProxyService.Middleware
         /// </summary>
         /// <param name="next">The next middleware in the ASP.NET Core pipeline.</param>
         /// <param name="store">The rate limit storage provider (in-memory implementation).</param>
-        public RateLimitingMiddleware(RequestDelegate next, IRateLimitStore store)
+        public RateLimitingMiddleware(RequestDelegate next, 
+            IRateLimitStore store,
+            ILogger<RateLimitingMiddleware> logger)
         {
             _next = next;
             _store = store;
+            _logger = logger;
         }
 
         /// <summary>
@@ -32,6 +36,7 @@ namespace WeatherProxyService.Middleware
         /// </summary>
         public async Task InvokeAsync(HttpContext context)
         {
+
             // Only apply rate limiting to the weather endpoint
             if (context.Request.Path.StartsWithSegments("/api/weather", StringComparison.OrdinalIgnoreCase))
             {
@@ -39,6 +44,7 @@ namespace WeatherProxyService.Middleware
                 if (!context.Items.TryGetValue("ClientApiKey", out var clientKeyObj)
                     || clientKeyObj is not string clientApiKey)
                 {
+                    _logger.LogInformation("API Key missing or invalid before rate limiting.");
                     context.Response.StatusCode = StatusCodes.Status401Unauthorized;
                     await context.Response.WriteAsJsonAsync(new
                     {
@@ -52,6 +58,7 @@ namespace WeatherProxyService.Middleware
 
                 if (!allowed)
                 {
+                    _logger.LogWarning("Rate limit exceeded for {Key}. Remaining = {Remaining}", clientApiKey, remaining);
                     // Too many requests
                     context.Response.StatusCode = StatusCodes.Status429TooManyRequests;
 
@@ -70,6 +77,8 @@ namespace WeatherProxyService.Middleware
 
                     return;
                 }
+
+                _logger.LogInformation("Rate limit OK for {Key}. Remaining = {Remaining}", clientApiKey, remaining);
 
                 // Add rate-limit headers for maximum client visibility
                 context.Response.Headers["X-RateLimit-Limit"] = LIMIT_PER_HOUR.ToString();

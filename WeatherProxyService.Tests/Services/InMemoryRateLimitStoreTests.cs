@@ -1,5 +1,7 @@
 ﻿using FluentAssertions;
 using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Logging;
+using Moq;
 using WeatherProxyService.Services;
 
 namespace WeatherProxyService.Tests.Services
@@ -10,7 +12,9 @@ namespace WeatherProxyService.Tests.Services
         public void Should_AllowFiveRequests_ThenBlock()
         {
             var cache = new MemoryCache(new MemoryCacheOptions());
-            var store = new InMemoryRateLimitStore(cache);
+            var logger = new Mock<ILogger<InMemoryRateLimitStore>>().Object;
+            var store = new InMemoryRateLimitStore(cache, logger);
+
 
             for (int i = 0; i < 5; i++)
             {

@@ -1,5 +1,6 @@
 ﻿using FluentAssertions;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using Moq;
 using Moq.Protected;
 using System.Net;
@@ -18,17 +19,26 @@ namespace WeatherProxyService.Tests.Services
 
             handler
                 .Protected()
-                .Setup<Task<HttpResponseMessage>>("SendAsync",
+                .Setup<Task<HttpResponseMessage>>(
+                    "SendAsync",
                     ItExpr.IsAny<HttpRequestMessage>(),
-                    ItExpr.IsAny<CancellationToken>())
+                    ItExpr.IsAny<CancellationToken>()
+                )
                 .ReturnsAsync(response);
 
             return new HttpClient(handler.Object);
         }
 
+        private ILogger<OpenWeatherService> CreateLogger()
+        {
+            // Create a dummy logger that does nothing
+            return Mock.Of<ILogger<OpenWeatherService>>();
+        }
+
         [Fact]
         public async Task Should_ReturnDescription_OnSuccess()
         {
+            // Arrange
             var json = @"{ ""weather"": [{ ""description"": ""rainy"" }] }";
 
             var httpClient = CreateHttpClient(new HttpResponseMessage
@@ -47,10 +57,20 @@ namespace WeatherProxyService.Tests.Services
             var settings = new Dictionary<string, string>();
             var config = new ConfigurationBuilder().AddInMemoryCollection(settings).Build();
 
-            var service = new OpenWeatherService(httpClientFactory.Object, selector.Object, config);
+            var logger = CreateLogger();
 
-            var (success, desc, error) = await service.GetWeatherDescriptionAsync("Sydney", "au");
+            var service = new OpenWeatherService(
+                httpClientFactory.Object,
+                selector.Object,
+                config,
+                logger
+            );
 
+            // Act
+            var (success, desc, error) =
+                await service.GetWeatherDescriptionAsync("Sydney", "au");
+
+            // Assert
             success.Should().BeTrue();
             desc.Should().Be("rainy");
             error.Should().BeNull();
@@ -59,6 +79,7 @@ namespace WeatherProxyService.Tests.Services
         [Fact]
         public async Task Should_ReturnError_WhenUpstreamFails()
         {
+            // Arrange
             var httpClient = CreateHttpClient(new HttpResponseMessage
             {
                 StatusCode = HttpStatusCode.BadRequest,
@@ -74,14 +95,23 @@ namespace WeatherProxyService.Tests.Services
 
             var config = new ConfigurationBuilder().Build();
 
-            var service = new OpenWeatherService(httpClientFactory.Object, selector.Object, config);
+            var logger = CreateLogger();
 
-            var (success, desc, error) = await service.GetWeatherDescriptionAsync("Sydney", "au");
+            var service = new OpenWeatherService(
+                httpClientFactory.Object,
+                selector.Object,
+                config,
+                logger
+            );
 
+            // Act
+            var (success, desc, error) =
+                await service.GetWeatherDescriptionAsync("Sydney", "au");
+
+            // Assert
             success.Should().BeFalse();
             desc.Should().BeNull();
             error!.Should().Contain("Upstream error");
         }
     }
-
 }

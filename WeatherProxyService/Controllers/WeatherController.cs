@@ -39,8 +39,13 @@ namespace WeatherProxyService.Controllers
         [HttpGet]
         public async Task<IActionResult> Get([FromQuery] string city, [FromQuery] string country)
         {
+            _logger.LogInformation("Weather endpoint hit for {City}, {Country}", city, country);
+
             if (string.IsNullOrWhiteSpace(city) || string.IsNullOrWhiteSpace(country))
             {
+                _logger.LogWarning(
+                    "Bad request: missing city or country parameter. City='{City}', Country='{Country}'",
+                    city, country);
                 return BadRequest(new
                 {
                     error = "Both 'city' and 'country' query parameters are required."

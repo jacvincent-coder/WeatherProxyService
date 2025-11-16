@@ -1,7 +1,27 @@
 using WeatherProxyService.Middleware;
 using WeatherProxyService.Services;
+using Microsoft.ApplicationInsights.AspNetCore.Extensions;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Structured Logging
+//builder.Logging.ClearProviders();
+builder.Logging.AddConsole();
+builder.Logging.AddDebug();
+builder.Logging.AddApplicationInsights(
+    configureTelemetryConfiguration: (config) => { },
+    configureApplicationInsightsLoggerOptions: (options) =>
+    {
+        options.TrackExceptionsAsExceptionTelemetry = true;
+    });
+
+
+// Application Insights logging and Telemetry
+builder.Services.AddApplicationInsightsTelemetry(new ApplicationInsightsServiceOptions
+{
+    ConnectionString = builder.Configuration["ApplicationInsights:ConnectionString"],
+    EnableAdaptiveSampling = false
+});
 
 
 // services
@@ -17,7 +37,8 @@ builder.Services.AddHttpClient("OpenWeatherClient", client =>
 
 
 builder.Services.AddControllers();
-// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
+
+// Swagger with API key support
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
@@ -49,13 +70,28 @@ builder.Services.AddSwaggerGen(c =>
 var app = builder.Build();
 
 // Validate config on startup
+
+var startupLogger = app.Services.GetRequiredService<ILoggerFactory>()
+                               .CreateLogger("Startup");
+
 var openWeatherKeys = app.Configuration.GetSection("OpenWeather:Keys").Get<string[]>();
 if (openWeatherKeys == null || openWeatherKeys.Length == 0)
-    throw new Exception("OpenWeather keys are not configured. Please set them in appsettings.json or environment variables.");
+{
+    startupLogger.LogCritical("OpenWeather API keys missing. Service cannot start.");
+    throw new InvalidOperationException("OpenWeather API keys are not configured. Please set them in appsettings.json or environment variables.");
+}
+    
 
 var clientKeys = app.Configuration.GetSection("ClientApiKeys").Get<string[]>();
 if (clientKeys == null || clientKeys.Length == 0)
-    throw new Exception("Client API keys are not configured. Please set them in appsettings.json or environment variables.");
+{
+    startupLogger.LogCritical("Client API keys missing. Service cannot start.");
+    throw new InvalidOperationException("Client API keys are not configured. Please set them in appsettings.json or environment variables.");
+}
+
+startupLogger.LogInformation("WeatherProxyService startup validation succeeded. Loaded {Count} OpenWeather keys and {ClientCount} client API keys.",
+    openWeatherKeys.Length, clientKeys.Length);
+
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
@@ -63,6 +99,28 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI();
 }
+
+// Global exception handling middleware
+app.UseExceptionHandler(errorApp =>
+{
+    errorApp.Run(async context =>
+    {
+        var logger = context.RequestServices.GetRequiredService<ILoggerFactory>()
+                                           .CreateLogger("GlobalExceptionHandler");
+
+        context.Response.StatusCode = 500;
+        context.Response.ContentType = "application/json";
+
+        var exception = context.Features.Get<Microsoft.AspNetCore.Diagnostics.IExceptionHandlerFeature>()?.Error;
+        logger.LogError(exception, "Unhandled exception occurred while processing request");
+
+        await context.Response.WriteAsJsonAsync(new
+        {
+            error = "Internal server error",
+            details = exception?.Message
+        });
+    });
+});
 
 // Middleware to validate API keys and enforce rate limiting
 app.UseMiddleware<ApiKeyValidationMiddleware>();
@@ -73,6 +131,9 @@ app.UseHttpsRedirection();
 app.UseAuthorization();
 
 app.MapControllers();
+
+
+startupLogger.LogInformation("WeatherProxyService is now running.");
 
 app.Run();
 

@@ -10,10 +10,12 @@ namespace WeatherProxyService.Services
     {
         private readonly IMemoryCache _cache;
         private readonly object _lock = new();
+        private readonly ILogger<InMemoryRateLimitStore> _logger;
 
-        public InMemoryRateLimitStore(IMemoryCache cache)
+        public InMemoryRateLimitStore(IMemoryCache cache, ILogger<InMemoryRateLimitStore> logger)
         {
             _cache = cache;
+            _logger = logger;
         }
 
         public (bool allowed, int remaining, DateTime resetUtc) TryConsume(string clientKey, int limitPerHour)
@@ -55,6 +57,10 @@ namespace WeatherProxyService.Services
                     {
                         AbsoluteExpiration = windowEnd
                     });
+
+                _logger.LogDebug("Rate limit state for {Key} => Count={Count}, WindowStart={Window}",
+                 clientKey, window.Count, window.WindowStart);
+
 
                 return (true, remainingAfter, windowEnd);
             }

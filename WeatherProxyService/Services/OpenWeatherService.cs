@@ -15,11 +15,13 @@ namespace WeatherProxyService.Services
         private readonly IHttpClientFactory _httpFactory;
         private readonly IOpenWeatherKeySelector _keySelector;
         private readonly string _baseUrl;
+        private readonly ILogger<OpenWeatherService> _logger;
 
         public OpenWeatherService(
             IHttpClientFactory httpFactory,
             IOpenWeatherKeySelector keySelector,
-            IConfiguration config)
+            IConfiguration config,
+            ILogger<OpenWeatherService> logger)
         {
             _httpFactory = httpFactory;
             _keySelector = keySelector;
@@ -27,6 +29,7 @@ namespace WeatherProxyService.Services
             // Allow overriding in config, fallback to default OpenWeather URL
             _baseUrl = config.GetValue<string>("OpenWeather:BaseUrl")
                        ?? "https://api.openweathermap.org/data/2.5/weather";
+            _logger = logger;
         }
 
         /// <summary>
@@ -35,6 +38,8 @@ namespace WeatherProxyService.Services
         /// </summary>
         public async Task<(bool success, string? description, string? error)> GetWeatherDescriptionAsync(string city, string country)
         {
+            _logger.LogInformation("Calling OpenWeather for City={City}, Country={Country}", city, country);
+
             var apiKey = _keySelector.GetNextKey();
             var client = _httpFactory.CreateClient("OpenWeatherClient");
 
@@ -47,6 +52,7 @@ namespace WeatherProxyService.Services
 
                 if (!response.IsSuccessStatusCode)
                 {
+                    _logger.LogWarning("OpenWeather returned {StatusCode} for {City}/{Country}", response.StatusCode, city, country);
                     var body = await response.Content.ReadAsStringAsync();
                     return (false, null, $"Upstream error {response.StatusCode}: {body}");
                 }
@@ -62,6 +68,8 @@ namespace WeatherProxyService.Services
             }
             catch (Exception ex)
             {
+                _logger.LogError(ex, "Exception calling OpenWeather for {City}/{Country}", city, country);
+
                 return (false, null, $"Exception calling OpenWeather: {ex.Message}");
             }
         }
