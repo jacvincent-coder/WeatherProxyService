@@ -22,13 +22,11 @@ namespace WeatherProxyService.Tests.Services
         {
             var handler = new Mock<HttpMessageHandler>();
 
-            handler
-                .Protected()
+            handler.Protected()
                 .Setup<Task<HttpResponseMessage>>(
                     "SendAsync",
                     ItExpr.IsAny<HttpRequestMessage>(),
-                    ItExpr.IsAny<CancellationToken>()
-                )
+                    ItExpr.IsAny<CancellationToken>())
                 .ReturnsAsync(response);
 
             return new HttpClient(handler.Object);
@@ -39,13 +37,11 @@ namespace WeatherProxyService.Tests.Services
             var handler = new Mock<HttpMessageHandler>();
             var queue = new Queue<HttpResponseMessage>(responses);
 
-            handler
-                .Protected()
+            handler.Protected()
                 .Setup<Task<HttpResponseMessage>>(
                     "SendAsync",
                     ItExpr.IsAny<HttpRequestMessage>(),
-                    ItExpr.IsAny<CancellationToken>()
-                )
+                    ItExpr.IsAny<CancellationToken>())
                 .ReturnsAsync(() => queue.Dequeue());
 
             return new HttpClient(handler.Object);
@@ -56,7 +52,7 @@ namespace WeatherProxyService.Tests.Services
         {
             // Arrange
             var geocodeJson = @"[
-                { ""lat"": -33.8688, ""lon"": 151.2093 }
+                { ""lat"": -33.8688, ""lon"": 151.2093, ""country"": ""AU"" }
             ]";
 
             var httpClient = CreateHttpClient(new HttpResponseMessage
@@ -84,7 +80,7 @@ namespace WeatherProxyService.Tests.Services
 
             // Act
             var (success, lat, lon, error) =
-                await service.ValidateCityCountryAsync("Sydney", "au");
+                await service.ValidateCityCountryAsync("Sydney", "Australia");
 
             // Assert
             success.Should().BeTrue();
@@ -97,7 +93,7 @@ namespace WeatherProxyService.Tests.Services
         public async Task ValidateCityCountry_ShouldReturnError_WhenNoResults()
         {
             // Arrange
-            var geocodeJson = "[]";
+            var geocodeJson = "[]"; // no geocode matches
 
             var httpClient = CreateHttpClient(new HttpResponseMessage
             {
@@ -123,8 +119,8 @@ namespace WeatherProxyService.Tests.Services
             );
 
             // Act
-            var (success, _, _, error) =
-                await service.ValidateCityCountryAsync("FakeCity", "xx");
+            var (success, lat, lon, error) =
+                await service.ValidateCityCountryAsync("FakeCity", "Mexico");
 
             // Assert
             success.Should().BeFalse();
@@ -135,7 +131,7 @@ namespace WeatherProxyService.Tests.Services
         public async Task Should_ReturnDescription_AfterSuccessfulValidation()
         {
             // Arrange
-            var geocodeJson = @"[{ ""lat"": -33.8688, ""lon"": 151.2093 }]";
+            var geocodeJson = @"[{ ""lat"": -33.8688, ""lon"": 151.2093, ""country"": ""AU"" }]";
             var weatherJson = @"{ ""weather"": [{ ""description"": ""sunny"" }] }";
 
             // Two responses in sequence: Geocode → Weather
@@ -158,8 +154,8 @@ namespace WeatherProxyService.Tests.Services
 
             var selector = new Mock<IOpenWeatherKeySelector>();
             selector.SetupSequence(s => s.GetNextKey())
-                    .Returns("key1") // for geocoding
-                    .Returns("key2"); // for weather
+                    .Returns("key1") // geocode
+                    .Returns("key2"); // weather
 
             var config = new ConfigurationBuilder().Build();
             var logger = CreateLogger();
@@ -173,7 +169,7 @@ namespace WeatherProxyService.Tests.Services
 
             // Act
             var (success, description, error) =
-                await service.GetWeatherDescriptionAsync("Sydney", "au");
+                await service.GetWeatherDescriptionAsync("Sydney", "Australia");
 
             // Assert
             success.Should().BeTrue();
@@ -185,7 +181,7 @@ namespace WeatherProxyService.Tests.Services
         public async Task Should_ReturnError_WhenWeatherApiFails()
         {
             // Arrange
-            var geocodeJson = @"[{ ""lat"": -33.8688, ""lon"": 151.2093 }]";
+            var geocodeJson = @"[{ ""lat"": -33.8688, ""lon"": 151.2093, ""country"": ""AU"" }]";
 
             // Geocode OK → Weather fails
             var httpClient = CreateSequenceClient(
@@ -207,8 +203,8 @@ namespace WeatherProxyService.Tests.Services
 
             var selector = new Mock<IOpenWeatherKeySelector>();
             selector.SetupSequence(s => s.GetNextKey())
-                    .Returns("key1")
-                    .Returns("key2");
+                    .Returns("key1") // geocode
+                    .Returns("key2"); // weather
 
             var config = new ConfigurationBuilder().Build();
             var logger = CreateLogger();
@@ -222,7 +218,7 @@ namespace WeatherProxyService.Tests.Services
 
             // Act
             var (success, desc, error) =
-                await service.GetWeatherDescriptionAsync("Sydney", "au");
+                await service.GetWeatherDescriptionAsync("Sydney", "Australia");
 
             // Assert
             success.Should().BeFalse();
