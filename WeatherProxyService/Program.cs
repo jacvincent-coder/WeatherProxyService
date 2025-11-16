@@ -4,12 +4,16 @@ using Microsoft.ApplicationInsights.AspNetCore.Extensions;
 
 var builder = WebApplication.CreateBuilder(args);
 
+var aiConnectionString = builder.Configuration["ApplicationInsights:ConnectionString"];
+
 // Structured Logging
 //builder.Logging.ClearProviders();
 builder.Logging.AddConsole();
 builder.Logging.AddDebug();
 builder.Logging.AddApplicationInsights(
-    configureTelemetryConfiguration: (config) => { },
+    configureTelemetryConfiguration: (config) => {
+        config.ConnectionString = aiConnectionString;
+    },
     configureApplicationInsightsLoggerOptions: (options) =>
     {
         options.TrackExceptionsAsExceptionTelemetry = true;
@@ -19,7 +23,7 @@ builder.Logging.AddApplicationInsights(
 // Application Insights logging and Telemetry
 builder.Services.AddApplicationInsightsTelemetry(new ApplicationInsightsServiceOptions
 {
-    ConnectionString = builder.Configuration["ApplicationInsights:ConnectionString"],
+    ConnectionString = aiConnectionString,
     EnableAdaptiveSampling = false
 });
 
