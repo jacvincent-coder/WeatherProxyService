@@ -110,6 +110,8 @@ So you can call `/api/weather` directly during development.
 - Enhance UI with TailwindCSS or Material UI  
 - Add caching for repeated weather lookups
 - Azure Devops CI/CD pipeline
+- Add an Azure APIM layer with policy pipeline for API Key Validation and Rate Limiting
+- Store secrets in Azure Key Vault and use Managed Identity to access from the API.
 - And more...
 
 ---
